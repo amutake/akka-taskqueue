@@ -11,6 +11,7 @@ object TaskQueue {
     val recep = system.actorOf(Props(classOf[Receptionist], seedNodes), name = "recep")
     val worker = system.actorOf(Props(classOf[Worker], recep), name = "worker")
     ClusterReceptionistExtension(system).registerService(recep)
+    worker ! NoneTask
     sys.addShutdownHook(system.shutdown)
   }
 }

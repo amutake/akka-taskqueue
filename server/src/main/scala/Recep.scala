@@ -14,7 +14,7 @@ class Receptionist(val seedNodes: Array[Address]) extends Actor with ActorLoggin
   val mediator = DistributedPubSubExtension(context.system).mediator
   mediator ! Subscribe("queue", self)
   var leader: Option[ActorSelection] = None
-  var queue = collection.mutable.Queue[Task]()
+  var queue = collection.mutable.Queue[String]()
   def isLeaderMe = leader == Some(self)
 
   override def preStart() = {
@@ -56,13 +56,17 @@ class Receptionist(val seedNodes: Array[Address]) extends Actor with ActorLoggin
       }
     }
     case WhoIsLeader(ret) => {
-      leader.fold(self ! WhoIsLeader(ret))(ret ! _)
+      leader.fold(self ! WhoIsLeader(ret)) { l =>
+        log.info("Leader is this: {}", l.toString)
+        ret ! Leader(l)
+      }
     }
     // queue control
     case InitQueue(q) => {
       queue = q
     }
     case Enqueue(task) => {
+      log.info("Enqueue!")
       queue += task
     }
     case Dequeue => {
@@ -73,22 +77,34 @@ class Receptionist(val seedNodes: Array[Address]) extends Actor with ActorLoggin
       }
     }
     // from client
-    case AddTask(task) => {
-      leader.fold(self ! AddTask(task)) { l =>
+    case task: String => {
+      log.info("Added a task from client: {}", task)
+      leader.fold {
+        log.info("leader is none")
+        self ! AddTask(task)
+      } { l =>
+        log.info("Add to leader: {}", l.toString)
         val uuid = UUID.randomUUID.toString
         l ! NewTask(task, uuid)
-        sender ! Ack(uuid)
+        sender ! uuid
       }
     }
     // leader only
     case NewTask(task, uuid) => {
+      log.info("New Task!")
       queue += task
       mediator ! Publish("queue", Enqueue(task))
     }
     case PleaseTask => {
-      val task = queue.dequeue
-      mediator ! Publish("queue", Dequeue)
-      sender ! task
+      try {
+        val task = queue.dequeue
+        mediator ! Publish("queue", Dequeue)
+        sender ! SomeTask(task)
+      } catch {
+        case _: Throwable => {
+          sender ! NoneTask
+        }
+      }
     }
   }
 }

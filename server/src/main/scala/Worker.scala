@@ -7,19 +7,24 @@ class Worker(val recep: ActorRef) extends Actor with ActorLogging {
     case Leader(ref) => {
       ref ! PleaseTask
     }
-    case task: Task => {
+    case SomeTask(task) => {
       task match {
-        case Task1 => {
+        case "task1" => {
           log.info("Processing task1...")
           Thread.sleep(3000)
           log.info("Finish task1")
         }
-        case Task2 => {
+        case "task2" => {
           log.info("Processing task2...")
           Thread.sleep(5000)
           log.info("Finish task2")
         }
       }
+      recep ! WhoIsLeader(self)
+    }
+    case NoneTask => {
+      log.info("task nothing...")
+      Thread.sleep(1000)
       recep ! WhoIsLeader(self)
     }
   }
